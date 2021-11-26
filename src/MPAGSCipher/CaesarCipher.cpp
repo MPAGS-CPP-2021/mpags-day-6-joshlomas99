@@ -1,5 +1,6 @@
 #include "CaesarCipher.hpp"
 #include "Alphabet.hpp"
+#include "Exceptions.hpp"
 
 #include <iostream>
 #include <string>
@@ -25,12 +26,11 @@ CaesarCipher::CaesarCipher(const std::string& key) : key_{0}
         // final day of this course - they are a very complex area of C++ that
         // could take an entire course on their own!)
         
+        // Handle negative keys seperately as std::stoul will not throw an exception for
+        // these, but will not produce the intended result.
         if (key.front() == '-') {
-            std::cerr
-                << "[error] cipher key must be an unsigned long integer for Caesar cipher,\n"
-                << "        the supplied key (" << key
-                << ") could not be successfully converted\n"
-                << "        using default key value of 0." << std::endl;
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
             return;
         }
 
@@ -38,19 +38,17 @@ CaesarCipher::CaesarCipher(const std::string& key) : key_{0}
             key_ = std::stoul(key) % Alphabet::size;
         }
         catch (const std::invalid_argument& e) {
-            std::cerr
-                << "[error] cipher key must be an unsigned long integer for Caesar cipher,\n"
-                << "        the supplied key (" << e.what()
-                << ") could not be successfully converted\n"
-                << "        using default key value of 0." << std::endl;
+            // using namespace std::string_literals;
+            // throw InvalidKey("Caesar cipher cannot be constructed with key: "s + std::string{e.what()} +
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
             return;
         }
         catch (const std::out_of_range& e) {
-            std::cerr
-                << "[error] cipher key must be an unsigned long integer for Caesar cipher,\n"
-                << "        the supplied key (" << e.what()
-                << ") could not be successfully converted\n"
-                << "        using default key value of 0." << std::endl;
+            // using namespace std::string_literals;
+            // throw InvalidKey("Caesar cipher cannot be constructed with key: "s + std::string{e.what()} +
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
             return;
         }
     }

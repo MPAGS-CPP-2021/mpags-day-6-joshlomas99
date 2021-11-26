@@ -67,6 +67,24 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    // Request construction of the appropriate cipher
+    std::unique_ptr<Cipher> cipher;
+    try {
+        cipher = cipherFactory(settings.cipherType, settings.cipherKey);
+    }
+    catch (const InvalidKey& e) {
+        std::cerr << "[error] Invalid key: " << e.what()
+                  << std::endl;
+        return 1;
+    }
+
+    // Check that the cipher was constructed successfully
+    if (!cipher) {
+        std::cerr << "[error] problem constructing requested cipher"
+                  << std::endl;
+        return 1;
+    }
+
     // Initialise variables
     char inputChar{'x'};
     std::string inputText;
@@ -92,16 +110,6 @@ int main(int argc, char* argv[])
         while (std::cin >> inputChar) {
             inputText += transformChar(inputChar);
         }
-    }
-
-    // Request construction of the appropriate cipher
-    auto cipher = cipherFactory(settings.cipherType, settings.cipherKey);
-
-    // Check that the cipher was constructed successfully
-    if (!cipher) {
-        std::cerr << "[error] problem constructing requested cipher"
-                  << std::endl;
-        return 1;
     }
 
     // Run the cipher on the input text, specifying whether to encrypt/decrypt

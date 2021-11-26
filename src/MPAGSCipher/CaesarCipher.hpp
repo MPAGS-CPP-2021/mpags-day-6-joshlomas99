@@ -31,7 +31,7 @@ class CaesarCipher : public Cipher {
      *
      * \param key the string to convert into the key to be used in the cipher
      * 
-     * \exception InvalidKey will be emitted if an unsigned interger is not supplied.
+     * \exception InvalidKey will be emitted if an unsigned integer is not supplied.
      */
     explicit CaesarCipher(const std::string& key);
 

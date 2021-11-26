@@ -35,12 +35,12 @@ class UnknownArgument : public std::invalid_argument {
 };
 
 /**
- * \class InvalidCaesarKey
- * \brief Exception to handle invalid key input for CaesarCipher function
+ * \class InvalidKey
+ * \brief Exception to handle invalid key input
  */
-class InvalidCaesarKey : public std::invalid_argument {
+class InvalidKey : public std::invalid_argument {
     public:
-        InvalidCaesarKey( const std::string& msg ) :
+        InvalidKey( const std::string& msg ) :
             std::invalid_argument(msg)
         {
         }
