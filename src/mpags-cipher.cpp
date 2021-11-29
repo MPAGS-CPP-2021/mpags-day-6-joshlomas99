@@ -115,71 +115,110 @@ int main(int argc, char* argv[])
         while (std::cin >> inputChar) {
             inputText += transformChar(inputChar);
         }
-    } 
-
-    // Create lambda function to call the 'applyCipher' function on
-    // the constructed Cipher object.
-    auto doCipher = [&cipher, &settings](std::string input) {
-        std::string output{cipher->applyCipher(input, settings.cipherMode)};
-        return output;
-    };
-
-    // Calculate lengths of inputText chunks to be seperated out for each thread
-    const size_t chunkLength{inputText.length()/threadNum};
-
-    // This will miss a few characters so we need the first few text chunks to be
-    // 1 longer than the rest, so we define the number of extra characters
-    size_t endTextLen{inputText.length() - threadNum*chunkLength};
-
-    // Define the starting point of the current text chunk
-    size_t inputTextChunkStart{0};
-
-    // Create empty container for each thread process    
-    std::vector<std::future<std::string>> futures;
-    
-    // Loop over the number of threads you want to use (should be configurable but
-    // don’t worry about that now!)
-    for (size_t threadCount{0}; threadCount < threadNum; threadCount++) {
-        // For each iteration, take the next chunk from the input string
-        std::string inputTextChunk{inputText.substr(inputTextChunkStart, chunkLength)};
-        inputTextChunkStart += chunkLength;
-
-        if (endTextLen > 0) {
-            // If we still require text chunks which are 1 character longer,
-            // make it longer by another character
-            inputTextChunk += inputText.substr(inputTextChunkStart, 1);
-            inputTextChunkStart++;
-            // Decrease the number of extra characters
-            endTextLen -= 1;
-        }
-        
-        // Start a new thread to run the lambda function that calls 'applyCipher'
-        futures.push_back(std::async(std::launch::async, doCipher, inputTextChunk));
-        
     }
-    
-    // Loop over the futures and wait until they are all completed
-    std::future_status status{std::future_status::timeout};
-    int allFuturesReady{1};
-    while (!allFuturesReady) {
-        allFuturesReady = 1;
-        for (size_t i{0}; i < futures.size(); i++) {
-            status = futures.at(i).wait_for(std::chrono::milliseconds(1));
-            if (status == std::future_status::timeout) {
-                std::cout << "[main] Waiting...\n";
-                allFuturesReady *= 0;
-            } else if (status == std::future_status::ready) {
-                std::cout << "[main] Thread " << i << " ready!\n";
-                allFuturesReady *= 1;
+
+    std::string outputText{""};
+
+    if (settings.cipherType == CipherType::Playfair) {
+        // We cannot use multi-threading here for the Playfair cipher as splitting
+        // up the inputText will mess with the processing of duplicate characters
+        // and adding a Z to the end of the string. We would need to implement
+        // multi-threading in the applyCipher function of this cipher instead,
+        // after all this processing has been completed.
+        outputText = cipher->applyCipher(inputText, settings.cipherMode);
+    }
+    else {
+        // Create lambda function to call the 'applyCipher' function on
+        // the constructed Cipher object.
+        auto doCipher = [&cipher, &settings](std::string input) {
+            return cipher->applyCipher(input, settings.cipherMode);
+        };
+            
+        // Create empty container for each thread process    
+        std::vector<std::future<std::string>> futures;
+
+        if (settings.cipherType == CipherType::Caesar) {
+            // Calculate lengths of inputText chunks to be seperated out for each thread
+            const size_t chunkLength{inputText.length()/threadNum};
+
+            // This will miss a few characters so we need the first few text chunks to be
+            // 1 longer than the rest, so we define the number of extra characters.
+            // This ensures we use every thread as evenly as possible
+            size_t endTextLen{inputText.length() - threadNum*chunkLength};
+
+            // Define the starting point of the current text chunk
+            size_t inputTextChunkStart{0};
+            
+            // Loop over the number of threads you want to use (should be configurable but
+            // don’t worry about that now!)
+            for (size_t threadCount{0}; threadCount < threadNum; threadCount++) {
+                // For each iteration, take the next chunk from the input string
+                std::string inputTextChunk{inputText.substr(inputTextChunkStart, chunkLength)};
+                inputTextChunkStart += chunkLength;
+
+                if (endTextLen > 0) {
+                    // If we still require text chunks which are 1 character longer,
+                    // make it longer by another character
+                    inputTextChunk += inputText.substr(inputTextChunkStart, 1);
+                    inputTextChunkStart++;
+                    // Decrease the number of extra characters
+                    endTextLen -= 1;
+                }
+                
+                // Start a new thread to run the lambda function that calls 'applyCipher'
+                futures.push_back(std::async(std::launch::async, doCipher, inputTextChunk));
+                
             }
         }
-    }
+        else if (settings.cipherType == CipherType::Vigenere) {
+            // Calculate lengths of inputText chunks to be seperated out for each thread
+            // For the Vigenere cipher each chunkLength needs to be a multiple of the key length,
+            // until the final chunk, so that we don't skip the end of the keyword half way through
+            // the overall inputText, so that the multi-threaded encryption is consistent with the
+            // single-threaded encryption.
+            const size_t chunkLength = (((inputText.length()/settings.cipherKey.length())/threadNum) + 1)*settings.cipherKey.length();
+            
+            // Loop over the number of threads you want to use (should be configurable but
+            // don’t worry about that now!)
+            for (size_t threadCount{0}; threadCount < threadNum; threadCount++) {
+                std::cout << threadCount << std::endl;
 
-    // // Get the results from them and assemble the final string
-    std::string outputText{""};
-    for (size_t i{0}; i < futures.size(); i++) {
-        outputText += futures.at(i).get();
-    }    
+                // For each iteration, take the next chunk from the input string
+                std::string inputTextChunk{""};
+                try {
+                    inputTextChunk = inputText.substr(threadCount*chunkLength, chunkLength);
+                }
+                catch (std::out_of_range&) {
+                    // If the substr function throws std::out_of_range it means that
+                    // we have reached the end of the string so we can stop the loop
+                    break;
+                }
+                std::cout << inputTextChunk << std::endl;
+                
+                // Start a new thread to run the lambda function that calls 'applyCipher'
+                futures.push_back(std::async(std::launch::async, doCipher, inputTextChunk));
+
+            }
+        }
+        
+        // Loop over the futures and wait until they are all completed
+        std::future_status status{std::future_status::timeout};
+        bool allFuturesReady{true};
+        while (!allFuturesReady) {
+            allFuturesReady = true;
+            for (auto &future : futures) {
+                status = future.wait_for(std::chrono::milliseconds(10));
+                if (status == std::future_status::timeout) {
+                    allFuturesReady = false;
+                }
+            }
+        }
+
+        // // Get the results from them and assemble the final string
+        for (auto &future : futures) {
+            outputText += future.get();
+        }
+    }
 
     // Output the encrypted/decrypted text to stdout/file
     if (!settings.outputFile.empty()) {
