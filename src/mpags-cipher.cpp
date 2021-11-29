@@ -7,8 +7,10 @@
 
 #include <cctype>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 int main(int argc, char* argv[])
@@ -19,6 +21,9 @@ int main(int argc, char* argv[])
     // Options that might be set by the command-line arguments
     ProgramSettings settings{
         false, false, "", "", "", CipherMode::Encrypt, CipherType::Caesar};
+    
+    // Set number of threads to a specific value (for now)
+    const size_t threadNum{12};
 
     // Process command line arguments
     try {
@@ -110,10 +115,71 @@ int main(int argc, char* argv[])
         while (std::cin >> inputChar) {
             inputText += transformChar(inputChar);
         }
+    } 
+
+    // Create lambda function to call the 'applyCipher' function on
+    // the constructed Cipher object.
+    auto doCipher = [&cipher, &settings](std::string input) {
+        std::string output{cipher->applyCipher(input, settings.cipherMode)};
+        return output;
+    };
+
+    // Calculate lengths of inputText chunks to be seperated out for each thread
+    const size_t chunkLength{inputText.length()/threadNum};
+
+    // This will miss a few characters so we need the first few text chunks to be
+    // 1 longer than the rest, so we define the number of extra characters
+    size_t endTextLen{inputText.length() - threadNum*chunkLength};
+
+    // Define the starting point of the current text chunk
+    size_t inputTextChunkStart{0};
+
+    // Create empty container for each thread process    
+    std::vector<std::future<std::string>> futures;
+    
+    // Loop over the number of threads you want to use (should be configurable but
+    // don’t worry about that now!)
+    for (size_t threadCount{0}; threadCount < threadNum; threadCount++) {
+        // For each iteration, take the next chunk from the input string
+        std::string inputTextChunk{inputText.substr(inputTextChunkStart, chunkLength)};
+        inputTextChunkStart += chunkLength;
+
+        if (endTextLen > 0) {
+            // If we still require text chunks which are 1 character longer,
+            // make it longer by another character
+            inputTextChunk += inputText.substr(inputTextChunkStart, 1);
+            inputTextChunkStart++;
+            // Decrease the number of extra characters
+            endTextLen -= 1;
+        }
+        
+        // Start a new thread to run the lambda function that calls 'applyCipher'
+        futures.push_back(std::async(std::launch::async, doCipher, inputTextChunk));
+        
+    }
+    
+    // Loop over the futures and wait until they are all completed
+    std::future_status status{std::future_status::timeout};
+    int allFuturesReady{1};
+    while (!allFuturesReady) {
+        allFuturesReady = 1;
+        for (size_t i{0}; i < futures.size(); i++) {
+            status = futures.at(i).wait_for(std::chrono::milliseconds(1));
+            if (status == std::future_status::timeout) {
+                std::cout << "[main] Waiting...\n";
+                allFuturesReady *= 0;
+            } else if (status == std::future_status::ready) {
+                std::cout << "[main] Thread " << i << " ready!\n";
+                allFuturesReady *= 1;
+            }
+        }
     }
 
-    // Run the cipher on the input text, specifying whether to encrypt/decrypt
-    const std::string outputText{cipher->applyCipher(inputText, settings.cipherMode)};
+    // // Get the results from them and assemble the final string
+    std::string outputText{""};
+    for (size_t i{0}; i < futures.size(); i++) {
+        outputText += futures.at(i).get();
+    }    
 
     // Output the encrypted/decrypted text to stdout/file
     if (!settings.outputFile.empty()) {
