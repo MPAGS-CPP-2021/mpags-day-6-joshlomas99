@@ -1,5 +1,6 @@
 #include "CaesarCipher.hpp"
 #include "Alphabet.hpp"
+#include "Exceptions.hpp"
 
 #include <iostream>
 #include <string>
@@ -24,16 +25,32 @@ CaesarCipher::CaesarCipher(const std::string& key) : key_{0}
         // handle that instead but we only cover exceptions very briefly on the
         // final day of this course - they are a very complex area of C++ that
         // could take an entire course on their own!)
-        for (const auto& elem : key) {
-            if (!std::isdigit(elem)) {
-                std::cerr
-                    << "[error] cipher key must be an unsigned long integer for Caesar cipher,\n"
-                    << "        the supplied key (" << key
-                    << ") could not be successfully converted" << std::endl;
-                return;
-            }
+        
+        // Handle negative keys seperately as std::stoul will not throw an exception for
+        // these, but will not produce the intended result.
+        if (key.front() == '-') {
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
+            return;
         }
-        key_ = std::stoul(key) % Alphabet::size;
+
+        try {
+            key_ = std::stoul(key) % Alphabet::size;
+        }
+        catch (const std::invalid_argument& e) {
+            // using namespace std::string_literals;
+            // throw InvalidKey("Caesar cipher cannot be constructed with key: "s + std::string{e.what()} +
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
+            return;
+        }
+        catch (const std::out_of_range& e) {
+            // using namespace std::string_literals;
+            // throw InvalidKey("Caesar cipher cannot be constructed with key: "s + std::string{e.what()} +
+            throw InvalidKey("Caesar cipher cannot be constructed with key '" + key + "'"
+                             "\n        Requires an unsigned long integer");
+            return;
+        }
     }
 }
 
